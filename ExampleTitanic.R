@@ -57,12 +57,12 @@ fit <- rpart(survived~., data = data_train, method = 'class') #method= which alg
 rpart.plot (fit, extra = 106)
 
 #Test & prediction
-predict_unseen <-predict(fit, data_test, type = 'class')
-table_mat <- table(data_test$survived, predict_unseen)
-table_mat
+#predict_unseen <-predict(fit, data_test, type = 'class')
+#table_mat <- table(data_test$survived, predict_unseen)
+#table_mat
 
-accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)
-print(paste('Accuracy for test', accuracy_Test))
+#accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)
+#print(paste('Accuracy for test', accuracy_Test))
 
 #tuning parameters
 #same as before but in function
@@ -71,14 +71,16 @@ accuracy_tune <- function(fit) #giati parameter to fit mono? gt oxi to data test
   predict_unseen <- predict(fit, data_test, type = 'class')
   table_mat <- table(data_test$survived, predict_unseen)
   accuracy_Test <- sum(diag(table_mat)) / sum(table_mat)
-  accuracy_Test #mporw na valw to print an 8elw
+  return(list(table_mat,paste('Accuracy for test', accuracy_Test)))
 }
+accuracy_tune(fit)
 #dokimazw times na dw an kalutereuei to model
-control <- rpart.control(minsplit = 4, #min obs before split
-                         minbucket = round(5 / 3), # min obs in the leaf
+control <- rpart.control(minsplit = 10, #min obs before split
+                         #minbucket = round(5 / 3), # min obs in the leaf
                          maxdepth = 3, 
                          cp = 0)
 tune_fit <- rpart(survived~., data = data_train, method = 'class', control = control)
-accuracy_tune(fit)
+rpart.plot(tune_fit, extra = 106)
+
 accuracy_tune(tune_fit)
 
