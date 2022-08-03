@@ -53,7 +53,9 @@ prop.table(table(data_test$survived))
 install.packages("rpart.plot")
 library(rpart)
 library(rpart.plot)
-fit <- rpart(survived~., data = data_train, method = 'class') #method= which algorithm
+fit <- rpart(survived~., 
+             data = data_train, 
+             method = 'class') #anova/poisson/class/exp
 rpart.plot (fit, extra = 106)
 
 #Test & prediction
@@ -79,8 +81,103 @@ control <- rpart.control(minsplit = 10, #min obs before split
                          #minbucket = round(5 / 3), # min obs in the leaf
                          maxdepth = 3, 
                          cp = 0)
-tune_fit <- rpart(survived~., data = data_train, method = 'class', control = control)
+tune_fit <- rpart(survived~., 
+                  data = data_train, 
+                  method = 'class', 
+                  control = control)
 rpart.plot(tune_fit, extra = 106)
 
 accuracy_tune(tune_fit)
+
+#using random forest for parameter tuning
+#https://www.guru99.com/r-random-forest-tutorial.html
+
+library(randomForest)
+library(caret)
+library(e1071)
+
+# Define the control
+trControl <- trainControl(method = "cv", #Cross Validation
+                          number = 10,   #folds (usually 5 or 10)
+                          search = "grid") #grid / random
+set.seed(1234)
+# train model
+rf_default <- train(survived~.,
+                    data = data_train,
+                    method = "rf",   #which classification or regression model 
+                    metric = "Accuracy",
+                    trControl = trControl)
+rf_default
+#find best mtry
+set.seed(1234)
+tuneGrid <- expand.grid(.mtry = c(1: 10))
+rf_mtry <- train(survived~.,
+                 data = data_train,
+                 method = "rf",
+                 metric = "Accuracy", #Accuracy/Kappa for classification
+                 tuneGrid = tuneGrid,
+                 trControl = trControl,
+                 importance = TRUE,
+                 nodesize = 14,
+                 ntree = 500)
+print(rf_mtry)
+max(rf_mtry$results$Accuracy)
+best_mtry <- rf_mtry$bestTune$mtry 
+best_mtry
+#find best maxnodes
+store_maxnode <- list()
+tuneGrid <- expand.grid(.mtry = best_mtry)
+for (maxnodes in c(20: 30)) {
+  set.seed(1234)
+  rf_maxnode <- train(survived~.,
+                      data = data_train,
+                      method = "rf",
+                      metric = "Accuracy",
+                      tuneGrid = tuneGrid,
+                      trControl = trControl,
+                      importance = TRUE,
+                      nodesize = 14,
+                      maxnodes = maxnodes,
+                      ntree = 300)
+  current_iteration <- toString(maxnodes)
+  store_maxnode[[current_iteration]] <- rf_maxnode
+}
+results_mtry <- resamples(store_maxnode)
+summary(results_mtry)
+#find best ntrees
+store_maxtrees <- list()
+for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
+  set.seed(5678)
+  rf_maxtrees <- train(survived~.,
+                       data = data_train,
+                       method = "rf",
+                       metric = "Accuracy",
+                       tuneGrid = tuneGrid,
+                       trControl = trControl,
+                       importance = TRUE,
+                       nodesize = 14,
+                       maxnodes = 24,
+                       ntree = ntree)
+  key <- toString(ntree)
+  store_maxtrees[[key]] <- rf_maxtrees
+}
+results_tree <- resamples(store_maxtrees)
+summary(results_tree)
+#use what we have found
+fit_rf <- train(survived~.,
+                data_train,
+                method = "rf",
+                metric = "Accuracy",
+                tuneGrid = tuneGrid,
+                trControl = trControl,
+                importance = TRUE,
+                nodesize = 14,
+                ntree = 800,
+                maxnodes = 24)
+
+#evaluate model
+prediction <-predict(fit_rf, data_test)
+confusionMatrix(prediction, data_test$survived)
+varImpPlot(fit_rf)
+
 
