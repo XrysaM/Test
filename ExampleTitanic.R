@@ -76,6 +76,7 @@ accuracy_tune <- function(fit) #giati parameter to fit mono? gt oxi to data test
   return(list(table_mat,paste('Accuracy for test', accuracy_Test)))
 }
 accuracy_tune(fit)
+
 #dokimazw times na dw an kalutereuei to model
 control <- rpart.control(minsplit = 10, #min obs before split
                          #minbucket = round(5 / 3), # min obs in the leaf
@@ -88,6 +89,9 @@ tune_fit <- rpart(survived~.,
 rpart.plot(tune_fit, extra = 106)
 
 accuracy_tune(tune_fit)
+
+
+
 
 #using random forest for parameter tuning
 #https://www.guru99.com/r-random-forest-tutorial.html
@@ -104,13 +108,13 @@ set.seed(1234)
 # train model
 rf_default <- train(survived~.,
                     data = data_train,
-                    method = "rf",   #which classification or regression model 
+                    method = "rf",   #which classification (or regression) model 
                     metric = "Accuracy",
                     trControl = trControl)
 rf_default
 #find best mtry
 set.seed(1234)
-tuneGrid <- expand.grid(.mtry = c(1: 10))
+tuneGrid <- expand.grid(.mtry = c(3: 10))
 rf_mtry <- train(survived~.,
                  data = data_train,
                  method = "rf",
@@ -119,15 +123,15 @@ rf_mtry <- train(survived~.,
                  trControl = trControl,
                  importance = TRUE,
                  nodesize = 14,
-                 ntree = 500)
-print(rf_mtry)
+                 ntree = 300)
+rf_mtry
 max(rf_mtry$results$Accuracy)
 best_mtry <- rf_mtry$bestTune$mtry 
 best_mtry
 #find best maxnodes
 store_maxnode <- list()
 tuneGrid <- expand.grid(.mtry = best_mtry)
-for (maxnodes in c(20: 30)) {
+for (maxnodes in c(20 : 30)) {
   set.seed(1234)
   rf_maxnode <- train(survived~.,
                       data = data_train,
@@ -140,10 +144,17 @@ for (maxnodes in c(20: 30)) {
                       maxnodes = maxnodes,
                       ntree = 300)
   current_iteration <- toString(maxnodes)
-  store_maxnode[[current_iteration]] <- rf_maxnode
+  store_maxnode[[current_iteration]] <- rf_maxnode #list pou se ka8e 8esh(20-30) exei to antistoixo train 
 }
-results_mtry <- resamples(store_maxnode)
+results_mtry <- resamples(store_maxnode) 
 summary(results_mtry)
+  #find max accuracy
+df_nodes <-results_mtry$values[seq(2,22,by=2)]
+max(df_nodes)
+  #what columns have the max value
+names(results_mtry$values)[which(results_mtry$values == max(df_nodes), arr.ind=T)[, "col"]]
+#deixnei pws epilegei to mikrotero max value, se emas einai to 25 (20-30)
+
 #find best ntrees
 store_maxtrees <- list()
 for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
@@ -156,13 +167,21 @@ for (ntree in c(250, 300, 350, 400, 450, 500, 550, 600, 800, 1000, 2000)) {
                        trControl = trControl,
                        importance = TRUE,
                        nodesize = 14,
-                       maxnodes = 24,
+                       maxnodes = 25,
                        ntree = ntree)
   key <- toString(ntree)
   store_maxtrees[[key]] <- rf_maxtrees
 }
 results_tree <- resamples(store_maxtrees)
 summary(results_tree)
+
+df_tree <- results_tree$values[seq(2,22,by=2)]
+max(colMeans(df_tree))
+
+dfmeans <- data.frame(colMeans(df_tree)) #8etw dataframe kai xrhsimopoiw auto ws pinaka(df) anaforas
+rownames(dfmeans)[which(dfmeans == max(colMeans(df_tree)), arr.ind=T)[, 1]]
+#deixnei pws epilegei to megalutero mean value, se emas einai to 400
+
 #use what we have found
 fit_rf <- train(survived~.,
                 data_train,
@@ -172,12 +191,29 @@ fit_rf <- train(survived~.,
                 trControl = trControl,
                 importance = TRUE,
                 nodesize = 14,
-                ntree = 800,
-                maxnodes = 24)
-
+                ntree = 400,
+                maxnodes = 25)
 #evaluate model
 prediction <-predict(fit_rf, data_test)
 confusionMatrix(prediction, data_test$survived)
-varImpPlot(fit_rf)
+varImp(fit_rf)
+plot(fit_rf$finalModel)
 
+#dokimh me randomForest function
+fit_rf2 <- randomForest(survived~.,
+                data_train,
+                method = "rf",
+                metric = "Accuracy",
+                tuneGrid = tuneGrid,
+                trControl = trControl,
+                importance = TRUE,
+                nodesize = 14,
+                ntree = 400,
+                maxnodes = 25)
 
+prediction <-predict(fit_rf2, data_test)
+confusionMatrix(prediction, data_test$survived)
+varImpPlot(fit_rf2)
+#auta bgazoun diaforetika apotelesmata
+varImp(fit_rf2)
+plot(fit_rf2) 
